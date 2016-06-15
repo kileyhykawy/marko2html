@@ -1,6 +1,6 @@
 {
   "name": "marko2html",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Generate a HTML file from a Marko template",
   "main": "bin/marko2html",
   "scripts": {
