@@ -58,10 +58,17 @@ program
     argTemplatePath = template;
     argDataPath = dataJson;
   })
+  .option('-o, --output [path]', 'specify output location (default is stdout), ')
   .parse(process.argv);
 
 log.debug('argTemplatePath: %s', argTemplatePath);
 log.debug('argDataPath: %s', argDataPath);
+log.debug('output: %j', program.output);
 
-renderTemplate(argTemplatePath, argDataPath, process.stdout);
+let outputStream = process.stdout;
+if (program.output) {
+  outputStream = fs.createWriteStream(program.output);
+}
+
+renderTemplate(argTemplatePath, argDataPath, outputStream);
 
