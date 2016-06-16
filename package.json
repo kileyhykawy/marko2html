@@ -4,7 +4,8 @@
   "description": "Generate a HTML file from a Marko template",
   "main": "bin/marko2html",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint ."
   },
   "repository": {
     "type": "git",
@@ -37,5 +38,9 @@
     "commander": "^2.9.0",
     "debug-logger": "^0.4.1",
     "marko": "^3.5.0"
+  },
+  "devDependencies": {
+    "eslint": "^2.12.0",
+    "eslint-config-google": "^0.6.0"
   }
 }

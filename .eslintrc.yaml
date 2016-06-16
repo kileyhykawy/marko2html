@@ -1,0 +1,17 @@
+---
+parserOptions:
+  ecmaVersion: 6
+
+env:
+  browser: true
+  node: true
+  mocha: true
+
+extends:
+  - eslint:recommended
+  - google
+
+rules:
+  strict: off
+# console is appropriate for Node apps so disable this check
+  no-console: off
