@@ -82,7 +82,8 @@ function fileExists(pathToCheck) {
 }
 
 /**
- * Builds the path to data file given a template file name.
+ * Builds the path to data file to be passed into require
+ * given a template file name.
  * If data path is a file, just use the data file name. Otherwise, we
  * use the data directory followed by the template file name with
  * .json extension.
@@ -105,10 +106,15 @@ function buildDataFilename(templateBasePath, templateFilePath, dataPathInfo) {
     );
   }
 
+  /*
+   * We don't put an extension on here as require will figure out to
+   * load a JSON or .js file. This allows us to use both static and
+   * dynamic configuration files
+   */
   return path.join(
     dataPathInfo.path,
     relativeFromBase,
-    path.parse(templateFilePath).name + '.json'
+    path.parse(templateFilePath).name
   );
 }
 
@@ -217,12 +223,13 @@ function processTemplateDirectory(templateDirPath, dataPathInfo, outputDir,
     let dataFilePath = buildDataFilename(templateDirAbsPath,
        template,
        dataPathInfo);
+/*
     if (!fileExists(dataFilePath)) {
       statusMessage += "Data file '" + dataFilePath + "' does not exist";
       console.error(statusMessage);
       return;
     }
-
+*/
     let outputFilePath = buildOutputPath(templateDirAbsPath,
       template,
       outputDir);
@@ -253,10 +260,10 @@ let argDataPath;
 
 program
   .version(version)
-  .arguments('<template> <dataJson>')
-  .action(function(template, dataJson) {
+  .arguments('<template> <datafile>')
+  .action(function(template, datafile) {
     argTemplatePath = template;
-    argDataPath = dataJson;
+    argDataPath = datafile;
   })
   .option('-o, --outfile [path_to_file]',
     'specify output file location (default is stdout), ')
