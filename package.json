@@ -37,7 +37,9 @@
   "dependencies": {
     "commander": "^2.9.0",
     "debug-logger": "^0.4.1",
-    "marko": "^3.5.0"
+    "glob": "^7.0.4",
+    "marko": "^3.5.0",
+    "mkdirp": "^0.5.1"
   },
   "devDependencies": {
     "eslint": "^2.12.0",

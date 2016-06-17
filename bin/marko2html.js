@@ -31,6 +31,8 @@ const program = require('commander');
 const path = require('path');
 const fs = require('fs');
 const marko = require('marko');
+const glob = require('glob');
+const mkdirp = require('mkdirp');
 
 /**
  * @typedef PathInfo
@@ -69,58 +71,87 @@ function getPathInfo(pathToCheck) {
 }
 
 /**
+ * Determine if the given path is a file that exists
+ *
+ * @param {string} pathToCheck - path to check
+ * @return {boolean} true if path is a file that exists
+ */
+function fileExists(pathToCheck) {
+  let pathInfo = getPathInfo(pathToCheck);
+  return (pathInfo.exists && pathInfo.isFile);
+}
+
+/**
  * Builds the path to data file given a template file name.
  * If data path is a file, just use the data file name. Otherwise, we
  * use the data directory followed by the template file name with
  * .json extension.
  *
+ * @param {string} templateBasePath - Base path to template folder or null
  * @param {string} templateFilePath - Path to template file
  * @param {PathInfo} dataPathInfo - path info object for data location
  * @return {string} Path to the data file name.
  */
-function buildDataFilename(templateFilePath, dataPathInfo) {
+function buildDataFilename(templateBasePath, templateFilePath, dataPathInfo) {
   if (dataPathInfo.isFile) {
     return dataPathInfo.path;
   }
 
+  let relativeFromBase = "";
+  if (templateBasePath) {
+    relativeFromBase = path.relative(
+      templateBasePath,
+      path.dirname(templateFilePath)
+    );
+  }
+
   return path.join(
     dataPathInfo.path,
+    relativeFromBase,
     path.parse(templateFilePath).name + '.json'
   );
 }
 
 /**
- * @typedef OutputInfo
- * @type Object
- * @property {string} outfile - path to an output file
- * @property {string} outdir - path to an output directory
- */
-/**
- * Builds an output stream to an output file given a template file name.
- * If output path is a file, just use the output file name. Otherwise, we
- * use the output directory followed by the template file name with
- * .html extension. If no file or directory, go to stdout.
+ * Builds an output path given a template file name and output directory.
+ * We use the output directory followed by the template file name with
+ * .html extension.
  *
+ * @param {string} templateBasePath - Base path to template folder or null
  * @param {string} templateFilePath - Path to template file
- * @param {OutputInfo} outputPath - Output info object for output location
- * @return {WriteStream} Stream to the output location
+ * @param {string} outputDir - Output directory
+ * @return {string} Output file path
  */
-function buildOutputStream(templateFilePath, outputPath) {
-  if (!outputPath.outfile && !outputPath.outdir) {
-    return process.stdout;
-  }
-
-  let outputFilePath;
-  if (outputPath.outfile) {
-    outputFilePath = outputPath.outfile;
-  } else {
-    outputFilePath = path.join(
-      outputPath.outdir,
-      path.parse(templateFilePath).name + '.html'
+function buildOutputPath(templateBasePath, templateFilePath, outputDir) {
+  let relativeFromBase = "";
+  if (templateBasePath) {
+    relativeFromBase = path.relative(
+      templateBasePath,
+      path.dirname(templateFilePath)
     );
   }
 
-  log.debug("buildOutputStream: outputPath='%s'", outputFilePath);
+  let outputFilePath = path.join(
+    outputDir,
+    relativeFromBase,
+    path.parse(templateFilePath).name + '.html'
+  );
+
+  return outputFilePath;
+}
+
+/**
+ * Builds an output stream given an output file path or stdout if
+ * no path given.
+ *
+ * @param {string} outputFilePath - path to create a stream for
+ * @return {WriteStream} - output stream
+ */
+function buildOutputStream(outputFilePath) {
+  if (!outputFilePath) {
+    return process.stdout;
+  }
+
   return fs.createWriteStream(outputFilePath);
 }
 
@@ -138,7 +169,6 @@ function renderTemplate(templateFile, dataFile, outputStream) {
 
   // Load data
   let dataPath = path.resolve(dataFile);
-  log.debug('dataPath: %s', dataPath);
   let data = require(dataPath);
 
   template.render(data, outputStream);
@@ -146,18 +176,72 @@ function renderTemplate(templateFile, dataFile, outputStream) {
 
 /**
  * Render a single template file from a given data location (dir/file) to a
- * given output location (file/dir/stdout).
+ * given output file or stdout.
  *
  * @param {string} templateFilePath - path to a single template file
  * @param {PathInfo} dataPathInfo - path info to data location
- * @param {OutputInfo} outputPath - info about path to output location
+ * @param {string} outputFile - path to output file, stdout if null or undefined
  */
-function processTemplateFile(templateFilePath, dataPathInfo, outputPath) {
-  let dataFilePath = buildDataFilename(templateFilePath, dataPathInfo);
-  log.debug("processTemplateFile: dataFile='%s'", dataFilePath);
-  let outputStream = buildOutputStream(templateFilePath, outputPath);
+function processTemplateFile(templateFilePath, dataPathInfo, outputFile) {
+  let dataFilePath = buildDataFilename(null, templateFilePath, dataPathInfo);
+  let outputStream = buildOutputStream(outputFile);
 
+  log.debug("processTemplateFile: template='%s', data='%s', output='%s'",
+    templateFilePath, dataFilePath, outputFile);
   renderTemplate(templateFilePath, dataFilePath, outputStream);
+}
+
+/**
+ * Render a directory of template files from a given data location (dir/file) to a
+ * given output directoyr.
+ *
+ * @param {string} templateDirPath - path to a folder of template files
+ * @param {PathInfo} dataPathInfo - path info to data location
+ * @param {string} outputDir - path to output directory
+ * @param {Array} ignoreList - Array of templates paths to ignore (glob)
+ */
+function processTemplateDirectory(templateDirPath, dataPathInfo, outputDir,
+    ignoreList) {
+  let templateDirAbsPath = path.resolve(templateDirPath);
+  let globPath = path.join(templateDirAbsPath, '**/*.marko');
+  let globOptions = {
+    ignore: ignoreList
+  };
+  let templates = glob.sync(globPath, globOptions);
+  log.debug("Templates: %s", templates.toString());
+
+  templates.forEach(function(template, index, array) {
+    let relativeTemplatePath = path.relative('', template);
+    let statusMessage = relativeTemplatePath + ": ";
+
+    let dataFilePath = buildDataFilename(templateDirAbsPath,
+       template,
+       dataPathInfo);
+    if (!fileExists(dataFilePath)) {
+      statusMessage += "Data file '" + dataFilePath + "' does not exist";
+      console.error(statusMessage);
+      return;
+    }
+
+    let outputFilePath = buildOutputPath(templateDirAbsPath,
+      template,
+      outputDir);
+    if (outputFilePath) {
+      mkdirp.sync(path.dirname(outputFilePath));
+    }
+    let outputStream = buildOutputStream(outputFilePath);
+
+    try {
+      log.debug("processTemplateDir: template='%s', data='%s', output='%s'",
+        relativeTemplatePath, dataFilePath, outputFilePath);
+      renderTemplate(template, dataFilePath, outputStream);
+      statusMessage += 'Done';
+    } catch (e) {
+      statusMessage += e.message;
+    }
+
+    console.error(statusMessage);
+  });
 }
 
 // MAIN PROGRAM
@@ -177,12 +261,19 @@ program
   .option('-o, --outfile [path_to_file]',
     'specify output file location (default is stdout), ')
   .option('-d, --outdir [path_to_dir]', 'specify output directory')
+  .option('-i, --ignore [glob]', 'glob spec of templates to ignore',
+    function(val, memo) {
+      memo.push(val);
+      return memo;
+    },
+    [])
   .parse(process.argv);
 
 log.debug('argTemplatePath: %s', argTemplatePath);
 log.debug('argDataPath: %s', argDataPath);
 log.debug('outfile: %j', program.outfile);
 log.debug('outdir: %j', program.outdir);
+log.debug('ignore: %s', program.ignore.toString());
 
 let outputPath = {
   outfile: program.outfile,
@@ -217,6 +308,12 @@ if (!templatePathInfo.isFile && !templatePathInfo.isDir) {
   process.exit(-1);
 }
 
+// If using a template directory, must specify output directory
+if (templatePathInfo.isDir && !outputPath.outdir) {
+  console.error("Need to use --outdir when using template folder");
+  process.exit(-1);
+}
+
 // Ensure that data path exists
 let dataPathInfo = getPathInfo(argDataPath);
 if (!dataPathInfo.exists) {
@@ -231,10 +328,14 @@ if (!dataPathInfo.isFile && !dataPathInfo.isDir) {
 
 try {
   if (templatePathInfo.isFile) {
-    processTemplateFile(templatePathInfo.path, dataPathInfo, outputPath);
+    processTemplateFile(templatePathInfo.path,
+      dataPathInfo,
+      outputPath.outfile);
   } else if (templatePathInfo.isDir) {
-    console.error("Template path '%s' is a directory", templatePathInfo.path);
-    process.exit(-1);
+    processTemplateDirectory(templatePathInfo.path,
+      dataPathInfo,
+      outputPath.outdir,
+      program.ignore);
   } else {
     console.error("Template path '%s' is not a file or directory",
       templatePathInfo.path);
