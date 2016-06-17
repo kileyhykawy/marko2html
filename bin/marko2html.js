@@ -71,17 +71,6 @@ function getPathInfo(pathToCheck) {
 }
 
 /**
- * Determine if the given path is a file that exists
- *
- * @param {string} pathToCheck - path to check
- * @return {boolean} true if path is a file that exists
- */
-function fileExists(pathToCheck) {
-  let pathInfo = getPathInfo(pathToCheck);
-  return (pathInfo.exists && pathInfo.isFile);
-}
-
-/**
  * Builds the path to data file to be passed into require
  * given a template file name.
  * If data path is a file, just use the data file name. Otherwise, we
